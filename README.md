@@ -15,7 +15,7 @@
 
 ```bash
 # Клонирование репозитория
-git clone <repository-url>
+git clone https://github.com/xtimon/oscillator.git
 cd oscillator
 
 # Установка зависимостей
