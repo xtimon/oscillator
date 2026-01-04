@@ -48,6 +48,11 @@ from .core import (
     PhysicalConstants,
     get_particle_mass,
     get_particle_spin,
+    get_particle_lifetime,
+    fermi_dirac,
+    bose_einstein,
+    planck_distribution,
+    thermal_energy_density,
 )
 
 # Физические модели
@@ -64,6 +69,13 @@ from .simulation import (
     DetailedMatterGenesis,
 )
 
+# Визуализация и отчёты
+from .visualization import (
+    FinalVisualization,
+    CosmologyReportVisualizer,
+    create_final_report,
+)
+
 # Публичный API
 __all__ = [
     # Версия
@@ -78,6 +90,13 @@ __all__ = [
     "PhysicalConstants",
     "get_particle_mass",
     "get_particle_spin",
+    "get_particle_lifetime",
+    
+    # Термодинамические распределения
+    "fermi_dirac",
+    "bose_einstein",
+    "planck_distribution",
+    "thermal_energy_density",
     
     # Модели
     "ParametricResonance",
@@ -88,6 +107,11 @@ __all__ = [
     "MatterGenesisSimulation",
     "PrimordialOscillatorUniverse",
     "DetailedMatterGenesis",
+    
+    # Визуализация
+    "FinalVisualization",
+    "CosmologyReportVisualizer",
+    "create_final_report",
 ]
 
 
@@ -100,10 +124,12 @@ def info():
 ║  Библиотека для моделирования рождения материи во Вселенной      ║
 ╠══════════════════════════════════════════════════════════════════╣
 ║  Доступные модули:                                               ║
-║    • core       - базовые типы данных и частицы                  ║
-║    • models     - физические модели (резонанс, лептогенез)       ║
-║    • simulation - комплексные симуляции                          ║
+║    • core          - базовые типы данных и частицы               ║
+║    • models        - физические модели (резонанс, лептогенез)    ║
+║    • simulation    - комплексные симуляции                       ║
+║    • visualization - визуализация и отчёты                       ║
 ╠══════════════════════════════════════════════════════════════════╣
-║  Примеры запуска: python -m oscillators.examples                 ║
+║  Примеры: python run_examples.py --example matter_genesis        ║
+║  Отчёт:   python run_examples.py --report                        ║
 ╚══════════════════════════════════════════════════════════════════╝
 """)

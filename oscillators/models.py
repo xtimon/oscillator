@@ -248,6 +248,11 @@ class LeptogenesisModel:
     создавая избыток лептонов над антилептонами.
     Сфалеронные переходы конвертируют это в барионную асимметрию.
     
+    Реалистичные параметры:
+    - CP-нарушение: ~10^-10 (микроскопическое)
+    - Масса тяжелого нейтрино: ~10^9-10^12 GeV
+    - Температура разогрева: ~10^9 GeV
+    
     Attributes:
         M: масса тяжелого нейтрино (GeV)
         h: константа Юкавы
@@ -256,7 +261,7 @@ class LeptogenesisModel:
         H: параметр Хаббла
     
     Example:
-        >>> model = LeptogenesisModel(M=1e10, Yukawa=1e-6, CP_violation=1e-6)
+        >>> model = LeptogenesisModel(M=1e10, Yukawa=1e-6, CP_violation=1e-10)
         >>> asymmetry = model.solve_leptogenesis()
     """
     
@@ -264,7 +269,7 @@ class LeptogenesisModel:
         self, 
         M: float = 1e10, 
         Yukawa: float = 1e-6, 
-        CP_violation: float = 1e-6
+        CP_violation: float = 1e-10  # Реалистичное микроскопическое значение
     ):
         """
         Инициализация модели лептогенеза.
@@ -272,14 +277,15 @@ class LeptogenesisModel:
         Args:
             M: масса тяжелого нейтрино (GeV)
             Yukawa: константа связи Юкавы
-            CP_violation: параметр CP-нарушения ε
+            CP_violation: параметр CP-нарушения ε (~1e-10 реалистично)
         """
         self.M = M
         self.h = Yukawa
         self.epsilon = CP_violation
         
-        self.T = 1e12  # Начальная температура
-        self.H = 1.66 * np.sqrt(100) * self.T**2 / 1e19  # Параметр Хаббла
+        # Реалистичная температура разогрева
+        self.T = 1e9  # GeV (вместо 1e12)
+        self.H = 1.66 * np.sqrt(106.75) * self.T**2 / 1e19  # Параметр Хаббла
         
     def decay_rate(self) -> float:
         """

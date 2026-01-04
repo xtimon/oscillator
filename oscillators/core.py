@@ -56,6 +56,7 @@ class Particle:
         spin: спин частицы
         creation_time: время рождения
         antiparticle: флаг античастицы
+        lifetime: время жизни частицы (None = стабильная)
     """
     type: ParticleType
     energy: float
@@ -64,6 +65,12 @@ class Particle:
     spin: float
     creation_time: float
     antiparticle: bool = False
+    lifetime: Optional[float] = None
+    
+    def __post_init__(self):
+        """Установка времени жизни частицы."""
+        if self.lifetime is None:
+            self.lifetime = get_particle_lifetime(self.type)
     
     def __str__(self):
         prefix = "anti-" if self.antiparticle else ""
@@ -82,6 +89,23 @@ class Particle:
         if self.energy > 0:
             return self.momentum / self.energy
         return np.zeros(3)
+    
+    def is_decayed(self, current_time: float) -> bool:
+        """
+        Проверка, распалась ли частица.
+        
+        Args:
+            current_time: текущее время симуляции
+            
+        Returns:
+            True если частица распалась
+        """
+        if self.lifetime is None:
+            return False
+        age = current_time - self.creation_time
+        # Экспоненциальный распад: P(decay) = 1 - exp(-t/τ)
+        decay_prob = 1.0 - np.exp(-age / self.lifetime)
+        return np.random.random() < decay_prob
 
 
 @dataclass
@@ -248,4 +272,108 @@ def get_particle_spin(ptype: ParticleType) -> float:
         ParticleType.HIGGS: 0        # скаляр
     }
     return spins.get(ptype, 0)
+
+
+def get_particle_lifetime(ptype: ParticleType) -> Optional[float]:
+    """
+    Получить время жизни частицы (в планковских единицах времени).
+    
+    Инфлатоны распадаются очень быстро (~10^-37 секунд).
+    Хиггс нестабилен (~10^-22 секунд).
+    Остальные частицы условно стабильны на масштабах симуляции.
+    
+    Args:
+        ptype: тип частицы
+        
+    Returns:
+        время жизни или None (стабильная)
+    """
+    lifetimes = {
+        ParticleType.INFLATON: 1e-5,     # Очень быстрый распад (~10^-37 с)
+        ParticleType.PHOTON: None,        # Стабильный
+        ParticleType.QUARK: None,         # Связанные в адронах
+        ParticleType.LEPTON: None,        # Электрон стабилен
+        ParticleType.DARK_MATTER: None,   # Стабильная (по определению)
+        ParticleType.HIGGS: 1e-3          # ~10^-22 секунд
+    }
+    return lifetimes.get(ptype, None)
+
+
+def fermi_dirac(energy: float, temperature: float, mu: float = 0.0) -> float:
+    """
+    Распределение Ферми-Дирака для фермионов.
+    
+    f(E) = 1 / (exp((E-μ)/T) + 1)
+    
+    Args:
+        energy: энергия частицы (GeV)
+        temperature: температура (GeV)
+        mu: химический потенциал (GeV)
+        
+    Returns:
+        вероятность занятости состояния
+    """
+    if temperature <= 0:
+        return 0.0
+    x = (energy - mu) / temperature
+    if x > 50:  # Защита от переполнения
+        return 0.0
+    if x < -50:
+        return 1.0
+    return 1.0 / (np.exp(x) + 1.0)
+
+
+def bose_einstein(energy: float, temperature: float, mu: float = 0.0) -> float:
+    """
+    Распределение Бозе-Эйнштейна для бозонов.
+    
+    n(E) = 1 / (exp((E-μ)/T) - 1)
+    
+    Args:
+        energy: энергия частицы (GeV)
+        temperature: температура (GeV)
+        mu: химический потенциал (GeV)
+        
+    Returns:
+        среднее число частиц в состоянии
+    """
+    if temperature <= 0:
+        return 0.0
+    x = (energy - mu) / temperature
+    if x > 50:  # Защита от переполнения
+        return 0.0
+    if x < 0.01:  # Защита от деления на ноль
+        return temperature / energy if energy > 0 else 0.0
+    return 1.0 / (np.exp(x) - 1.0)
+
+
+def planck_distribution(energy: float, temperature: float) -> float:
+    """
+    Планковское распределение для фотонов (μ=0).
+    
+    Args:
+        energy: энергия фотона (GeV)
+        temperature: температура (GeV)
+        
+    Returns:
+        среднее число фотонов в моде
+    """
+    return bose_einstein(energy, temperature, mu=0.0)
+
+
+def thermal_energy_density(temperature: float, g_eff: float = 106.75) -> float:
+    """
+    Плотность энергии релятивистского газа.
+    
+    ρ = (π²/30) × g_eff × T⁴
+    
+    Args:
+        temperature: температура (GeV)
+        g_eff: эффективное число степеней свободы
+               (106.75 для СМ при T > 100 GeV)
+        
+    Returns:
+        плотность энергии (GeV⁴)
+    """
+    return (np.pi**2 / 30) * g_eff * temperature**4
 

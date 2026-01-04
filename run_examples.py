@@ -8,6 +8,7 @@
     python run_examples.py --example NAME     # Запуск конкретного примера
     python run_examples.py --list             # Список примеров
     python run_examples.py --quick            # Быстрая демонстрация
+    python run_examples.py --report           # Полный отчёт с визуализацией
 
 Доступные примеры:
     matter_genesis       - Рождение материи из инфлатона
@@ -69,7 +70,43 @@ def quick_demo():
     print("\n" + "="*60)
     print("Для полной симуляции используйте:")
     print("  python run_examples.py --example matter_genesis")
+    print("Для полного отчёта с визуализацией:")
+    print("  python run_examples.py --report")
     print("="*60)
+
+
+def run_full_report(save_path: str = './report'):
+    """Запуск полной симуляции с генерацией отчёта и визуализации."""
+    from oscillators import (
+        MatterGenesisSimulation,
+        create_final_report,
+        info
+    )
+    
+    info()
+    
+    print("\n" + "="*70)
+    print("ПОЛНАЯ СИМУЛЯЦИЯ С ГЕНЕРАЦИЕЙ ОТЧЁТА")
+    print("="*70)
+    
+    print("\n🚀 Инициализация симуляции...")
+    sim = MatterGenesisSimulation(
+        volume_size=10.0,
+        initial_inflaton_energy=1e12,
+        hubble_parameter=1e-5,
+        reheating_temperature=1e9,
+        cp_violation=1e-10
+    )
+    
+    print("⏳ Запуск эволюции Вселенной (500 шагов)...")
+    history = sim.evolve_universe(total_time=500.0, dt=0.5, show_progress=True)
+    
+    print("\n📊 Создание финального отчёта...")
+    create_final_report(sim, history, save_path=save_path)
+    
+    print(f"\n✅ Отчёт сохранён в: {save_path}/")
+    print("   • comprehensive_visualization.png - визуализация")
+    print("   • report.txt - текстовый отчёт")
 
 
 def main():
@@ -110,6 +147,19 @@ def main():
         help="Информация о библиотеке"
     )
     
+    parser.add_argument(
+        "--report", "-r",
+        action="store_true",
+        help="Полный отчёт с визуализацией (сохраняется в ./report)"
+    )
+    
+    parser.add_argument(
+        "--output", "-o",
+        type=str,
+        default="./report",
+        help="Директория для сохранения отчёта (по умолчанию: ./report)"
+    )
+    
     args = parser.parse_args()
     
     # Информация о библиотеке
@@ -128,6 +178,11 @@ def main():
     # Быстрая демонстрация
     if args.quick:
         quick_demo()
+        return
+    
+    # Полный отчёт с визуализацией
+    if args.report:
+        run_full_report(save_path=args.output)
         return
     
     # Запуск всех примеров
