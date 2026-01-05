@@ -7,11 +7,18 @@
 - DetailedMatterGenesis: полная интегрированная модель
 """
 
+import logging
 import numpy as np
 from typing import Dict, List, Optional, Tuple
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+
+try:
+    from scipy.spatial import KDTree
+    HAS_KDTREE = True
+except ImportError:
+    HAS_KDTREE = False
 
 from .core import (
     SpinType, ParticleType, Particle, QuantumOscillator,
@@ -19,6 +26,9 @@ from .core import (
     fermi_dirac, bose_einstein, planck_distribution, thermal_energy_density
 )
 from .models import ParametricResonance, LeptogenesisModel, QuantumCreationInExpandingUniverse
+
+# Настройка логирования
+logger = logging.getLogger(__name__)
 
 
 class MatterGenesisSimulation:
@@ -497,63 +507,133 @@ class MatterGenesisSimulation:
         При аннигиляции пара частица-античастица превращается в фотоны.
         Это ключевой процесс, который оставляет только небольшой избыток
         барионов (~10^-10 от фотонов).
+        
+        Использует KDTree для оптимизации O(n log n) вместо O(n²).
         """
         if len(self.particles) < 2:
             return
         
-        to_remove = set()
+        # Собираем частицы, которые могут аннигилировать
+        matter_particles = []
+        antimatter_particles = []
+        matter_indices = []
+        antimatter_indices = []
         
-        for i in range(len(self.particles)):
-            if i in to_remove:
-                continue
-                
-            pi = self.particles[i]
+        for i, p in enumerate(self.particles):
+            if p.type in [ParticleType.QUARK, ParticleType.LEPTON]:
+                if p.antiparticle:
+                    antimatter_particles.append(p)
+                    antimatter_indices.append(i)
+                else:
+                    matter_particles.append(p)
+                    matter_indices.append(i)
+        
+        if not matter_particles or not antimatter_particles:
+            return
+        
+        to_remove = set()
+        new_photons = []
+        
+        # Радиус аннигиляции
+        annihilation_radius = 1.0
+        
+        # Используем KDTree для быстрого поиска соседей если доступен
+        if HAS_KDTREE and len(antimatter_particles) > 10:
+            # Строим KDTree для античастиц
+            anti_positions = np.array([p.position for p in antimatter_particles])
+            tree = KDTree(anti_positions)
             
-            if pi.type not in [ParticleType.QUARK, ParticleType.LEPTON]:
-                continue
-            
-            for j in range(i+1, len(self.particles)):
-                if j in to_remove:
+            for mi, (matter_idx, mp) in enumerate(zip(matter_indices, matter_particles)):
+                if matter_idx in to_remove:
                     continue
-                    
-                pj = self.particles[j]
                 
-                if (pi.type == pj.type and pi.antiparticle != pj.antiparticle):
-                    dist = np.linalg.norm(pi.position - pj.position)
-                    # Очень высокая вероятность аннигиляции
-                    # В реальности почти все пары аннигилируют, оставляя η ~ 6e-10
+                # Ищем ближайших соседей
+                nearby = tree.query_ball_point(mp.position, r=annihilation_radius)
+                
+                for aj in nearby:
+                    anti_idx = antimatter_indices[aj]
+                    if anti_idx in to_remove:
+                        continue
+                    
+                    ap = antimatter_particles[aj]
+                    
+                    # Проверяем совпадение типов
+                    if mp.type != ap.type:
+                        continue
+                    
+                    dist = np.linalg.norm(mp.position - ap.position)
                     annihilation_prob = np.exp(-dist * 5.0) * dt * 2.0
                     
                     if np.random.random() < annihilation_prob:
-                        to_remove.add(i)
-                        to_remove.add(j)
+                        to_remove.add(matter_idx)
+                        to_remove.add(anti_idx)
                         
-                        # Обновляем счётчики барионов при аннигиляции кварков
-                        if pi.type == ParticleType.QUARK:
-                            # Удаляем 1/3 бариона и 1/3 антибариона
+                        # Обновляем счётчики барионов
+                        if mp.type == ParticleType.QUARK:
                             self.n_baryons = max(0, self.n_baryons - 1/3)
                             self.n_antibaryons = max(0, self.n_antibaryons - 1/3)
                         
-                        # Рождение фотонов при аннигиляции
+                        # Создаём фотоны
                         n_photons = np.random.poisson(2)
-                        
                         for _ in range(n_photons):
-                            photon_energy = (pi.energy + pj.energy) / max(1, n_photons)
+                            photon_energy = (mp.energy + ap.energy) / max(1, n_photons)
                             photon = Particle(
                                 type=ParticleType.PHOTON,
                                 energy=photon_energy,
                                 momentum=np.random.randn(3) * photon_energy,
-                                position=(pi.position + pj.position) / 2,
+                                position=(mp.position + ap.position) / 2,
                                 spin=1,
                                 creation_time=self.time
                             )
-                            self.particles.append(photon)
+                            new_photons.append(photon)
                             self.particle_statistics[ParticleType.PHOTON] += 1
-                            self.n_photons += 1  # Увеличиваем счётчик фотонов
+                            self.n_photons += 1
+                        
+                        break  # Одна частица — одна аннигиляция
+        else:
+            # Fallback к O(n²) для малого числа частиц
+            for mi, (matter_idx, mp) in enumerate(zip(matter_indices, matter_particles)):
+                if matter_idx in to_remove:
+                    continue
+                
+                for aj, (anti_idx, ap) in enumerate(zip(antimatter_indices, antimatter_particles)):
+                    if anti_idx in to_remove:
+                        continue
+                    
+                    if mp.type != ap.type:
+                        continue
+                    
+                    dist = np.linalg.norm(mp.position - ap.position)
+                    annihilation_prob = np.exp(-dist * 5.0) * dt * 2.0
+                    
+                    if np.random.random() < annihilation_prob:
+                        to_remove.add(matter_idx)
+                        to_remove.add(anti_idx)
+                        
+                        if mp.type == ParticleType.QUARK:
+                            self.n_baryons = max(0, self.n_baryons - 1/3)
+                            self.n_antibaryons = max(0, self.n_antibaryons - 1/3)
+                        
+                        n_photons = np.random.poisson(2)
+                        for _ in range(n_photons):
+                            photon_energy = (mp.energy + ap.energy) / max(1, n_photons)
+                            photon = Particle(
+                                type=ParticleType.PHOTON,
+                                energy=photon_energy,
+                                momentum=np.random.randn(3) * photon_energy,
+                                position=(mp.position + ap.position) / 2,
+                                spin=1,
+                                creation_time=self.time
+                            )
+                            new_photons.append(photon)
+                            self.particle_statistics[ParticleType.PHOTON] += 1
+                            self.n_photons += 1
                         
                         break
         
+        # Обновляем список частиц
         self.particles = [p for i, p in enumerate(self.particles) if i not in to_remove]
+        self.particles.extend(new_photons)
     
     def calculate_baryon_asymmetry(self) -> float:
         """
@@ -869,51 +949,52 @@ class MatterGenesisSimulation:
     
     def _print_statistics(self, final_snapshot: Dict):
         """Вывод итоговой статистики."""
-        print("\n" + "="*60)
-        print("ИТОГОВАЯ СТАТИСТИКА")
-        print("="*60)
+        logger.info("=" * 60)
+        logger.info("ИТОГОВАЯ СТАТИСТИКА")
+        logger.info("=" * 60)
         
-        print(f"\nВремя симуляции: {final_snapshot['time']:.2e}")
-        print(f"Масштабный фактор: {final_snapshot['scale_factor']:.2e}")
-        print(f"Температура: {final_snapshot['temperature']:.2e} GeV")
-        print(f"Количество частиц: {final_snapshot['n_particles']}")
+        logger.info(f"Время симуляции: {final_snapshot['time']:.2e}")
+        logger.info(f"Масштабный фактор: {final_snapshot['scale_factor']:.2e}")
+        logger.info(f"Температура: {final_snapshot['temperature']:.2e} GeV")
+        logger.info(f"Количество частиц: {final_snapshot['n_particles']}")
         
         # Барионная асимметрия η
         eta = final_snapshot['baryon_asymmetry']
-        print(f"\nБАРИОННАЯ АСИММЕТРИЯ:")
-        print(f"  η (симуляция):   {eta:.2e}")
-        print(f"  η (наблюдаемое): 6.1×10⁻¹⁰")
+        logger.info("БАРИОННАЯ АСИММЕТРИЯ:")
+        logger.info(f"  η (симуляция):   {eta:.2e}")
+        logger.info(f"  η (наблюдаемое): 6.1×10⁻¹⁰")
         
         if eta != 0:
             ratio = eta / 6.1e-10
-            print(f"  Отношение:       {ratio:.2f}")
+            logger.info(f"  Отношение:       {ratio:.2f}")
             if abs(np.log10(abs(ratio))) < 1:
-                print(f"  ✓ Хорошее согласие (в пределах 1 порядка)")
+                logger.info("  ✓ Хорошее согласие (в пределах 1 порядка)")
             elif abs(np.log10(abs(ratio))) < 2:
-                print(f"  ~ Удовлетворительно (в пределах 2 порядков)")
+                logger.info("  ~ Удовлетворительно (в пределах 2 порядков)")
             else:
-                print(f"  ⚠ Расхождение: {abs(np.log10(abs(ratio))):.1f} порядков")
+                logger.warning(f"  ⚠ Расхождение: {abs(np.log10(abs(ratio))):.1f} порядков")
         
         # Детали подсчёта
-        print(f"\n  n_B (барионы):       {final_snapshot.get('n_baryons', 0):.1f}")
-        print(f"  n_Bbar (антибарионы): {final_snapshot.get('n_antibaryons', 0):.1f}")
-        print(f"  n_γ (фотоны):         {final_snapshot.get('n_photons', 0):.0f}")
+        logger.info(f"  n_B (барионы):       {final_snapshot.get('n_baryons', 0):.1f}")
+        logger.info(f"  n_Bbar (антибарионы): {final_snapshot.get('n_antibaryons', 0):.1f}")
+        logger.info(f"  n_γ (фотоны):         {final_snapshot.get('n_photons', 0):.0f}")
         
-        print("\nРАСПРЕДЕЛЕНИЕ ПО ТИПАМ:")
+        logger.info("РАСПРЕДЕЛЕНИЕ ПО ТИПАМ:")
         total = sum(final_snapshot['particle_stats'].values())
         for ptype, count in final_snapshot['particle_stats'].items():
             pct = count / total * 100 if total > 0 else 0
-            print(f"  {ptype.value:15s}: {count:8d} ({pct:6.2f}%)")
+            logger.info(f"  {ptype.value:15s}: {count:8d} ({pct:6.2f}%)")
         
         # Сравнение с наблюдаемым составом
-        print("\nСРАВНЕНИЕ С НАБЛЮДАЕМЫМ СОСТАВОМ:")
-        print(f"  Тёмная материя: {final_snapshot['particle_stats'].get(ParticleType.DARK_MATTER, 0) / total * 100 if total > 0 else 0:.1f}% (наблюд. ~27%)")
+        logger.info("СРАВНЕНИЕ С НАБЛЮДАЕМЫМ СОСТАВОМ:")
+        dm_pct = final_snapshot['particle_stats'].get(ParticleType.DARK_MATTER, 0) / total * 100 if total > 0 else 0
+        logger.info(f"  Тёмная материя: {dm_pct:.1f}% (наблюд. ~27%)")
         quark_pct = final_snapshot['particle_stats'].get(ParticleType.QUARK, 0) / total * 100 if total > 0 else 0
-        print(f"  Кварки/барионы: {quark_pct:.1f}% (наблюд. ~5%)")
+        logger.info(f"  Кварки/барионы: {quark_pct:.1f}% (наблюд. ~5%)")
         photon_pct = final_snapshot['particle_stats'].get(ParticleType.PHOTON, 0) / total * 100 if total > 0 else 0
-        print(f"  Фотоны:         {photon_pct:.1f}% (доминируют)")
+        logger.info(f"  Фотоны:         {photon_pct:.1f}% (доминируют)")
         
-        print("="*60)
+        logger.info("=" * 60)
 
 
 class PrimordialOscillatorUniverse:
@@ -1071,9 +1152,9 @@ class PrimordialOscillatorUniverse:
         Returns:
             история эволюции
         """
-        print("Начальное распределение спинов:")
+        logger.info("Начальное распределение спинов:")
         for spin, count in self.spin_distribution.items():
-            print(f"  {spin.name}: {count}")
+            logger.info(f"  {spin.name}: {count}")
         
         history = []
         iterator = tqdm(range(steps), desc="Эволюция") if show_progress else range(steps)
@@ -1198,11 +1279,11 @@ class PrimordialOscillatorUniverse:
         
         # Статистика
         final_stats = history[-1]
-        print("\nФинальная статистика:")
-        print(f"Температура: {final_stats['temperature']:.4f}")
+        logger.info("Финальная статистика:")
+        logger.info(f"Температура: {final_stats['temperature']:.4f}")
         for spin, count in final_stats['spin_counts'].items():
             pct = count / len(self.oscillators) * 100
-            print(f"  {spin}: {count} ({pct:.1f}%)")
+            logger.info(f"  {spin}: {count} ({pct:.1f}%)")
 
 
 class DetailedMatterGenesis:
@@ -1237,32 +1318,32 @@ class DetailedMatterGenesis:
         Returns:
             словарь со всеми результатами
         """
-        print("="*70)
-        print("ПОЛНАЯ СИМУЛЯЦИЯ РОЖДЕНИЯ МАТЕРИИ")
-        print("="*70)
+        logger.info("=" * 70)
+        logger.info("ПОЛНАЯ СИМУЛЯЦИЯ РОЖДЕНИЯ МАТЕРИИ")
+        logger.info("=" * 70)
         
         # 1. Инфляция
-        print("\n1. ИНФЛЯЦИОННАЯ ФАЗА:")
-        print("   - Квантовые флуктуации метрики")
-        print("   - Рождение первичных неоднородностей")
+        logger.info("1. ИНФЛЯЦИОННАЯ ФАЗА:")
+        logger.info("   - Квантовые флуктуации метрики")
+        logger.info("   - Рождение первичных неоднородностей")
         inflation_results = self._simulate_inflation()
         
         # 2. Разогрев
-        print("\n2. ФАЗА РАЗОГРЕВА:")
-        print("   - Параметрический резонанс")
-        print("   - Распад инфлатона")
+        logger.info("2. ФАЗА РАЗОГРЕВА:")
+        logger.info("   - Параметрический резонанс")
+        logger.info("   - Распад инфлатона")
         reheating_results = self._simulate_reheating()
         
         # 3. Асимметрия
-        print("\n3. ГЕНЕРАЦИЯ АСИММЕТРИИ:")
-        print("   - Нарушение CP-симметрии")
-        print("   - Лептогенез → Бариогенез")
+        logger.info("3. ГЕНЕРАЦИЯ АСИММЕТРИИ:")
+        logger.info("   - Нарушение CP-симметрии")
+        logger.info("   - Лептогенез → Бариогенез")
         asymmetry_results = self._simulate_asymmetry()
         
         # 4. Равновесие
-        print("\n4. УСТАНОВЛЕНИЕ РАВНОВЕСИЯ:")
-        print("   - Аннигиляция")
-        print("   - Нуклеосинтез")
+        logger.info("4. УСТАНОВЛЕНИЕ РАВНОВЕСИЯ:")
+        logger.info("   - Аннигиляция")
+        logger.info("   - Нуклеосинтез")
         equilibrium_results = self._simulate_equilibrium()
         
         results = {
@@ -1506,44 +1587,44 @@ class DetailedMatterGenesis:
     
     def _print_summary(self, results: Dict):
         """Вывод сводки."""
-        print("\n" + "="*70)
-        print("ИТОГОВАЯ СВОДКА")
-        print("="*70)
+        logger.info("=" * 70)
+        logger.info("ИТОГОВАЯ СВОДКА")
+        logger.info("=" * 70)
         
-        print(f"\n1. ИНФЛЯЦИЯ:")
-        print(f"   e-фолды: {results['inflation']['N_e_folds']}")
-        print(f"   H: {results['inflation']['H_inf']:.2e} GeV")
+        logger.info("1. ИНФЛЯЦИЯ:")
+        logger.info(f"   e-фолды: {results['inflation']['N_e_folds']}")
+        logger.info(f"   H: {results['inflation']['H_inf']:.2e} GeV")
         
-        print(f"\n2. РАЗОГРЕВ:")
-        print(f"   T_reh: {results['reheating']['reheating_temperature']:.2e} GeV")
-        print(f"   Эффективность: {results['reheating']['efficiency']*100:.1f}%")
+        logger.info("2. РАЗОГРЕВ:")
+        logger.info(f"   T_reh: {results['reheating']['reheating_temperature']:.2e} GeV")
+        logger.info(f"   Эффективность: {results['reheating']['efficiency']*100:.1f}%")
         
-        print(f"\n3. ГЕНЕРАЦИЯ АСИММЕТРИИ:")
+        logger.info("3. ГЕНЕРАЦИЯ АСИММЕТРИИ:")
         asym = results['asymmetry']
-        print(f"   ε (CP-нарушение): {asym.get('epsilon', 0):.2e}")
-        print(f"   Резонансное усиление: ×{asym.get('resonant_enhancement', 1):.0f}")
-        print(f"   Сфалеронная конверсия: {asym.get('sphaleron_conversion', 0):.2f}")
-        print(f"   η (финальная): {asym['final_B']:.2e}")
-        print(f"   η (наблюдаемое): 6.1×10⁻¹⁰")
+        logger.info(f"   ε (CP-нарушение): {asym.get('epsilon', 0):.2e}")
+        logger.info(f"   Резонансное усиление: ×{asym.get('resonant_enhancement', 1):.0f}")
+        logger.info(f"   Сфалеронная конверсия: {asym.get('sphaleron_conversion', 0):.2f}")
+        logger.info(f"   η (финальная): {asym['final_B']:.2e}")
+        logger.info(f"   η (наблюдаемое): 6.1×10⁻¹⁰")
         
         observed_B = 6.1e-10
         simulated_B = abs(asym['final_B'])
         
-        print(f"\n4. ОЦЕНКА СОГЛАСИЯ:")
+        logger.info("4. ОЦЕНКА СОГЛАСИЯ:")
         if simulated_B > 0:
             ratio = simulated_B / observed_B
             discrepancy = np.log10(ratio)
-            print(f"   Отношение η_sim/η_obs: {ratio:.2f}")
-            print(f"   Расхождение: {discrepancy:+.2f} порядков")
+            logger.info(f"   Отношение η_sim/η_obs: {ratio:.2f}")
+            logger.info(f"   Расхождение: {discrepancy:+.2f} порядков")
             
             if abs(discrepancy) < 0.5:
-                print("   ⭐⭐⭐⭐⭐ ОТЛИЧНО!")
+                logger.info("   ⭐⭐⭐⭐⭐ ОТЛИЧНО!")
             elif abs(discrepancy) < 1:
-                print("   ⭐⭐⭐⭐ Хорошее согласие!")
+                logger.info("   ⭐⭐⭐⭐ Хорошее согласие!")
             elif abs(discrepancy) < 2:
-                print("   ⭐⭐⭐ Удовлетворительно")
+                logger.info("   ⭐⭐⭐ Удовлетворительно")
             else:
-                print("   ⚠ Требуется настройка параметров")
+                logger.warning("   ⚠ Требуется настройка параметров")
         else:
-            print("   ⚠ Асимметрия не сгенерирована")
+            logger.warning("   ⚠ Асимметрия не сгенерирована")
 
