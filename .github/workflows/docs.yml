@@ -1,0 +1,72 @@
+name: Documentation
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'README.md'
+      - 'oscillators/**/*.py'
+  workflow_dispatch:
+
+jobs:
+  docs-check:
+    name: Check Documentation
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Check README formatting
+      shell: bash
+      env:
+        PYTHONIOENCODING: utf-8
+      run: |
+        if ! grep -q "# Oscillator" README.md; then
+          echo "README.md missing main title"
+          exit 1
+        fi
+        echo "[OK] README.md format check passed"
+
+    - name: Install package
+      run: |
+        pip install -r requirements.txt
+
+    - name: Verify code examples
+      shell: bash
+      env:
+        PYTHONIOENCODING: utf-8
+        MPLBACKEND: Agg
+      run: |
+        python -c "
+        # Test that examples in README can be imported
+        from oscillators import (
+            MatterGenesisSimulation, PrimordialOscillatorUniverse,
+            DetailedMatterGenesis, ParametricResonance,
+            LeptogenesisModel, QuantumCreationInExpandingUniverse,
+            SpinType, ParticleType, Particle, QuantumOscillator,
+            create_calibrated_simulation
+        )
+        print('[OK] All imports from README work')
+        "
+
+    - name: Check docstrings
+      shell: bash
+      env:
+        PYTHONIOENCODING: utf-8
+      run: |
+        python -c "
+        import oscillators
+        
+        # Check that main modules have docstrings
+        assert oscillators.__doc__ is not None, 'Package missing docstring'
+        print('[OK] Package has docstring')
+        
+        # Check version
+        assert hasattr(oscillators, '__version__'), 'Package missing __version__'
+        print(f'[OK] Package version: {oscillators.__version__}')
+        "
+

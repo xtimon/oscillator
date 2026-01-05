@@ -1,0 +1,205 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    name: Test on Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Cache pip packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov
+
+    - name: Check imports
+      shell: bash
+      env:
+        PYTHONIOENCODING: utf-8
+      run: |
+        python -c "
+        from oscillators import (
+            SpinType, ParticleType, Particle, QuantumOscillator,
+            ParametricResonance, LeptogenesisModel,
+            MatterGenesisSimulation, PrimordialOscillatorUniverse,
+            DetailedMatterGenesis, create_calibrated_simulation
+        )
+        print('All imports successful')
+        "
+
+    - name: Run basic tests
+      shell: bash
+      env:
+        PYTHONIOENCODING: utf-8
+        MPLBACKEND: Agg
+      run: |
+        python -c "
+        import numpy as np
+        from oscillators import (
+            SpinType, ParticleType, Particle, QuantumOscillator,
+            PhysicalConstants, get_particle_mass, get_particle_spin,
+            ParametricResonance, LeptogenesisModel,
+            MatterGenesisSimulation
+        )
+        
+        # Test SpinType
+        assert SpinType.SCALAR.value == 0
+        assert SpinType.SPINOR.value == 0.5
+        print('[OK] SpinType tests passed')
+        
+        # Test ParticleType
+        assert ParticleType.PHOTON.value == 'photon'
+        assert ParticleType.QUARK.value == 'quark'
+        print('[OK] ParticleType tests passed')
+        
+        # Test Particle creation
+        p = Particle(
+            type=ParticleType.PHOTON,
+            energy=1.0,
+            momentum=np.array([1.0, 0.0, 0.0]),
+            position=np.array([0.0, 0.0, 0.0]),
+            spin=1.0,
+            creation_time=0.0
+        )
+        assert p.energy == 1.0
+        print('[OK] Particle tests passed')
+        
+        # Test QuantumOscillator
+        osc = QuantumOscillator(
+            frequency=1.0,
+            amplitude=1.0+0j,
+            spin=SpinType.SCALAR,
+            spin_state=None,
+            position=np.array([0.0, 0.0, 0.0])
+        )
+        assert osc.frequency == 1.0
+        print('[OK] QuantumOscillator tests passed')
+        
+        # Test PhysicalConstants
+        assert PhysicalConstants.SPEED_OF_LIGHT > 0
+        assert PhysicalConstants.PLANCK_CONSTANT > 0
+        print('[OK] PhysicalConstants tests passed')
+        
+        # Test ParametricResonance
+        resonance = ParametricResonance()
+        assert resonance.m > 0
+        print('[OK] ParametricResonance tests passed')
+        
+        # Test MatterGenesisSimulation initialization
+        sim = MatterGenesisSimulation(volume_size=1.0)
+        assert sim.volume_size == 1.0
+        print('[OK] MatterGenesisSimulation tests passed')
+        
+        print('\\nAll tests passed!')
+        "
+
+    - name: Run pytest (if tests exist)
+      continue-on-error: true
+      shell: bash
+      env:
+        PYTHONIOENCODING: utf-8
+        MPLBACKEND: Agg
+      run: |
+        if [ -d "tests" ] || [ -f "test_*.py" ]; then
+          pytest tests/ -v --cov=oscillators --cov-report=xml
+        else
+          echo "No tests directory found, skipping pytest"
+        fi
+
+    - name: Upload coverage to Codecov
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+  lint:
+    name: Lint and Format Check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install linting dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install black flake8
+
+    - name: Check code formatting with black
+      run: |
+        black --check oscillators/ || true
+        echo "Note: Black formatting check (not enforced)"
+
+    - name: Lint with flake8
+      run: |
+        flake8 oscillators/ --count --select=E9,F63,F7,F82 --show-source --statistics || true
+        echo "Note: Flake8 linting (warnings only)"
+
+  build:
+    name: Build package
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install build dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build wheel
+
+    - name: Build package
+      run: |
+        python -m build
+
+    - name: Check built package
+      shell: bash
+      env:
+        PYTHONIOENCODING: utf-8
+      run: |
+        pip install dist/*.whl
+        python -c "from oscillators import MatterGenesisSimulation; print('Package installs correctly')"
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: dist
+        path: dist/
+        retention-days: 7
+
