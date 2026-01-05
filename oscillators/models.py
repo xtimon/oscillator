@@ -7,12 +7,16 @@
 - QuantumCreationInExpandingUniverse: рождение частиц из вакуума
 """
 
+import logging
 import numpy as np
 from scipy.integrate import odeint
 from scipy.special import zeta
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from typing import Dict, List, Tuple, Optional
+
+# Настройка логирования
+logger = logging.getLogger(__name__)
 
 
 class ParametricResonance:
@@ -432,11 +436,11 @@ class LeptogenesisModel:
         # Конверсия в барионы через сфалероны
         final_asymmetry = L[-1] * 0.1
         
-        print(f"\nЛептогенез - результаты:")
-        print(f"  Начальная плотность N: {y0[0]:.2e}")
-        print(f"  Конечная асимметрия L: {L[-1]:.2e}")
-        print(f"  Предсказанная η (барионная): {final_asymmetry:.2e}")
-        print(f"  Наблюдаемая η: 6×10⁻¹⁰")
+        logger.info("Лептогенез - результаты:")
+        logger.info(f"  Начальная плотность N: {y0[0]:.2e}")
+        logger.info(f"  Конечная асимметрия L: {L[-1]:.2e}")
+        logger.info(f"  Предсказанная η (барионная): {final_asymmetry:.2e}")
+        logger.info(f"  Наблюдаемая η: 6×10⁻¹⁰")
         
         return final_asymmetry
 
@@ -629,10 +633,10 @@ class QuantumCreationInExpandingUniverse:
             plt.tight_layout()
             plt.show()
         
-        print(f"\nКвантовое рождение частиц:")
-        print(f"  Масса поля: {self.m}")
-        print(f"  Параметр Хаббла: {self.H}")
-        print(f"  Число частиц (k=0.1): {results[0.1]['n_k']:.2e}")
+        logger.info("Квантовое рождение частиц:")
+        logger.info(f"  Масса поля: {self.m}")
+        logger.info(f"  Параметр Хаббла: {self.H}")
+        logger.info(f"  Число частиц (k=0.1): {results[0.1]['n_k']:.2e}")
         
         return results
 

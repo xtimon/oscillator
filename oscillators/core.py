@@ -199,9 +199,32 @@ class QuantumOscillator:
         self.amplitude *= phase_factor
 
 
-# Физические константы (в натуральных единицах)
+# Физические константы (в натуральных единицах ħ = c = k_B = 1)
 class PhysicalConstants:
-    """Физические константы для космологических вычислений."""
+    """
+    Физические константы для космологических вычислений.
+    
+    Используются натуральные единицы: ħ = c = k_B = 1.
+    Энергия измеряется в GeV, время в GeV⁻¹, длина в GeV⁻¹.
+    
+    Конверсии:
+        - 1 GeV⁻¹ ≈ 6.58 × 10⁻²⁵ сек
+        - 1 GeV⁻¹ ≈ 1.97 × 10⁻¹⁶ м
+        - 1 К ≈ 8.62 × 10⁻¹⁴ GeV
+    """
+    
+    # Фундаментальные константы (в натуральных единицах)
+    SPEED_OF_LIGHT = 1.0        # c = 1
+    PLANCK_CONSTANT = 1.0       # ħ = 1
+    BOLTZMANN_CONSTANT = 1.0    # k_B = 1
+    
+    # Гравитационная константа G = 1/M_Planck² в натуральных единицах
+    GRAVITATIONAL_CONSTANT = 1.0 / (1.22e19)**2
+    
+    # Конверсионные факторы
+    GEV_TO_SECONDS = 6.58e-25      # 1 GeV⁻¹ в секундах
+    GEV_TO_METERS = 1.97e-16       # 1 GeV⁻¹ в метрах
+    KELVIN_TO_GEV = 8.617e-14      # 1 К в GeV
     
     # Массы частиц в GeV
     ELECTRON_MASS = 0.000511
@@ -209,27 +232,44 @@ class PhysicalConstants:
     TAU_MASS = 1.777
     UP_QUARK_MASS = 0.0022
     DOWN_QUARK_MASS = 0.0047
+    STRANGE_QUARK_MASS = 0.095
+    CHARM_QUARK_MASS = 1.27
+    BOTTOM_QUARK_MASS = 4.18
     TOP_QUARK_MASS = 173.0
-    HIGGS_MASS = 125.0
+    HIGGS_MASS = 125.1
     W_BOSON_MASS = 80.4
     Z_BOSON_MASS = 91.2
+    PROTON_MASS = 0.938
+    NEUTRON_MASS = 0.940
     
     # Планковские единицы
-    PLANCK_MASS = 1.22e19  # GeV
-    PLANCK_TIME = 5.39e-44  # секунды
-    PLANCK_LENGTH = 1.62e-35  # метры
+    PLANCK_MASS = 1.22e19         # GeV
+    PLANCK_TIME = 5.39e-44        # секунды
+    PLANCK_LENGTH = 1.62e-35      # метры
+    PLANCK_TEMPERATURE = 1.42e32  # Кельвин
     
-    # Космологические параметры
-    CMB_TEMPERATURE = 2.725  # Кельвин
-    BARYON_TO_PHOTON_RATIO = 6.1e-10
-    DARK_MATTER_FRACTION = 0.27
-    DARK_ENERGY_FRACTION = 0.68
-    BARYON_FRACTION = 0.05
+    # Космологические параметры (Planck 2018)
+    CMB_TEMPERATURE = 2.7255      # Кельвин
+    CMB_TEMPERATURE_GEV = 2.7255 * 8.617e-14  # В GeV
+    BARYON_TO_PHOTON_RATIO = 6.1e-10  # η = n_B / n_γ
+    DARK_MATTER_FRACTION = 0.268  # Ω_DM (Planck 2018)
+    DARK_ENERGY_FRACTION = 0.684  # Ω_Λ (Planck 2018)
+    BARYON_FRACTION = 0.049       # Ω_b (Planck 2018)
+    HUBBLE_CONSTANT = 67.4        # km/s/Mpc (Planck 2018)
     
-    # Константы взаимодействия
-    FINE_STRUCTURE = 1/137
-    WEAK_COUPLING = 1/30
-    STRONG_COUPLING = 0.12
+    # Температуры фазовых переходов
+    ELECTROWEAK_SCALE = 246.0     # GeV (VEV Хиггса)
+    QCD_SCALE = 0.2               # GeV (Λ_QCD)
+    GUT_SCALE = 1e16              # GeV (приблизительно)
+    
+    # Константы взаимодействия (при масштабе M_Z)
+    FINE_STRUCTURE = 1.0 / 137.036      # α_EM
+    WEAK_COUPLING = 1.0 / 30.0          # α_W
+    STRONG_COUPLING = 0.118             # α_s(M_Z)
+    
+    # Степени свободы
+    G_EFF_SM_HIGH_T = 106.75    # g_* для T >> 100 GeV
+    G_EFF_SM_LOW_T = 3.36       # g_* после аннигиляции e+e-
 
 
 def get_particle_mass(ptype: ParticleType) -> float:

@@ -13,12 +13,23 @@
 
 ## Установка
 
+### Через PyPI (рекомендуется)
+
+```bash
+pip install oscillators-cosmology
+```
+
+### Из исходников
+
 ```bash
 # Клонирование репозитория
 git clone https://github.com/xtimon/oscillator.git
 cd oscillator
 
-# Установка зависимостей
+# Установка в режиме разработки
+pip install -e .
+
+# Или только зависимости
 pip install -r requirements.txt
 ```
 
@@ -138,20 +149,60 @@ python run_examples.py --all
 python run_examples.py --info
 ```
 
+## Командная строка (CLI)
+
+После установки через pip доступна команда `oscillators`:
+
+```bash
+# Информация о библиотеке
+oscillators info
+
+# Быстрая симуляция рождения материи
+oscillators simulate --quick
+
+# Полная симуляция с параметрами
+oscillators simulate --time 1000 --output ./report --save-report
+
+# Детальная симуляция всех фаз
+oscillators detailed
+
+# Калибровка под данные Planck
+oscillators calibrate
+
+# Список примеров
+oscillators examples --list
+
+# Бенчмарк производительности
+oscillators benchmark
+
+# Справка по командам
+oscillators --help
+```
+
 ## Структура проекта
 
 ```
 oscillator/
 ├── oscillators/                # Основная библиотека
 │   ├── __init__.py            # Экспорт классов
+│   ├── __main__.py            # CLI интерфейс
 │   ├── core.py                # Базовые типы данных
 │   ├── models.py              # Физические модели
 │   ├── simulation.py          # Комплексные симуляции
+│   ├── visualization.py       # Визуализация результатов
+│   ├── calibration.py         # Калибровка моделей
+│   ├── logging_config.py      # Настройка логирования
 │   └── examples.py            # Примеры использования
+├── tests/                     # Юнит-тесты
+│   ├── test_core.py
+│   ├── test_models.py
+│   └── test_simulation.py
+├── report/                    # Результаты симуляций
 ├── run_examples.py            # Главный скрипт запуска
+├── main.py                    # Точка входа
+├── pyproject.toml             # Конфигурация проекта
 ├── requirements.txt           # Зависимости
-├── README.md                  # Документация
-└── main.py                    # Оригинальный файл (устаревший)
+└── README.md                  # Документация
 ```
 
 ## Модули
@@ -216,6 +267,26 @@ n_k = |β_k|²
 - Эволюцию состава Вселенной во времени
 - Барионную асимметрию η ≈ 6×10⁻¹⁰
 - Современный состав (68% ΛE, 27% DM, 5% барионы)
+
+## Разработка
+
+### Установка dev-зависимостей
+
+```bash
+pip install -e ".[dev]"
+```
+
+### Запуск тестов
+
+```bash
+pytest tests/ -v
+```
+
+### Покрытие кода
+
+```bash
+pytest tests/ --cov=oscillators --cov-report=html
+```
 
 ## Лицензия
 

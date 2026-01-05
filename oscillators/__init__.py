@@ -86,6 +86,15 @@ from .calibration import (
     CALIBRATED_PARAMS,
 )
 
+# Логирование
+from .logging_config import (
+    get_logger,
+    setup_logging,
+    set_level,
+    enable_debug,
+    enable_quiet,
+)
+
 # Публичный API
 __all__ = [
     # Версия
@@ -130,6 +139,13 @@ __all__ = [
     "get_calibrated_params",
     "load_calibrated_params",
     "CALIBRATED_PARAMS",
+    
+    # Логирование
+    "get_logger",
+    "setup_logging",
+    "set_level",
+    "enable_debug",
+    "enable_quiet",
     
     # Фабричная функция
     "create_calibrated_simulation",
