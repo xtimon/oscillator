@@ -76,6 +76,16 @@ from .visualization import (
     create_final_report,
 )
 
+# Калибровка под данные Planck
+from .calibration import (
+    PlanckData,
+    CosmologyCalibrator,
+    create_calibration_report,
+    get_calibrated_params,
+    load_calibrated_params,
+    CALIBRATED_PARAMS,
+)
+
 # Публичный API
 __all__ = [
     # Версия
@@ -112,7 +122,54 @@ __all__ = [
     "FinalVisualization",
     "CosmologyReportVisualizer",
     "create_final_report",
+    
+    # Калибровка
+    "PlanckData",
+    "CosmologyCalibrator",
+    "create_calibration_report",
+    "get_calibrated_params",
+    "load_calibrated_params",
+    "CALIBRATED_PARAMS",
+    
+    # Фабричная функция
+    "create_calibrated_simulation",
 ]
+
+
+def create_calibrated_simulation(
+    volume_size: float = 10.0,
+    initial_inflaton_energy: float = 1e12,
+    hubble_parameter: float = 1e-5,
+    use_file: str = None
+):
+    """
+    Создание симуляции с откалиброванными параметрами Planck 2018.
+    
+    Args:
+        volume_size: размер объёма симуляции
+        initial_inflaton_energy: энергия инфлатона (GeV)
+        hubble_parameter: параметр Хаббла
+        use_file: путь к файлу с параметрами (опционально)
+        
+    Returns:
+        MatterGenesisSimulation с откалиброванными параметрами
+        
+    Example:
+        >>> sim = create_calibrated_simulation()
+        >>> history = sim.evolve_universe(total_time=500.0)
+    """
+    if use_file:
+        params = load_calibrated_params(use_file)
+    else:
+        params = get_calibrated_params()
+    
+    return MatterGenesisSimulation(
+        volume_size=volume_size,
+        initial_inflaton_energy=initial_inflaton_energy,
+        hubble_parameter=hubble_parameter,
+        reheating_temperature=params.get('reheating_temp', 1e9),
+        cp_violation=params.get('CP_violation', 4.97e-11)
+    )
 
 
 def info():

@@ -9,6 +9,7 @@
     python run_examples.py --list             # Список примеров
     python run_examples.py --quick            # Быстрая демонстрация
     python run_examples.py --report           # Полный отчёт с визуализацией
+    python run_examples.py --calibrate        # Калибровка под данные Planck
 
 Доступные примеры:
     matter_genesis       - Рождение материи из инфлатона
@@ -109,6 +110,98 @@ def run_full_report(save_path: str = './report'):
     print("   • report.txt - текстовый отчёт")
 
 
+def run_calibrated_simulation(save_path: str = './report'):
+    """Запуск симуляции с откалиброванными параметрами Planck."""
+    from oscillators import (
+        create_calibrated_simulation,
+        create_final_report,
+        get_calibrated_params,
+        info
+    )
+    
+    info()
+    
+    print("\n" + "="*70)
+    print("СИМУЛЯЦИЯ С ОТКАЛИБРОВАННЫМИ ПАРАМЕТРАМИ PLANCK 2018")
+    print("="*70)
+    
+    # Показываем параметры
+    params = get_calibrated_params()
+    print("\n📊 ИСПОЛЬЗУЕМЫЕ ПАРАМЕТРЫ:")
+    print(f"  CP-нарушение (ε):        {params['CP_violation']:.2e}")
+    print(f"  Резонансное усиление:    {params['resonant_enhancement']:.1f}×")
+    print(f"  Температура разогрева:   {params['reheating_temp']:.2e} GeV")
+    print(f"  Доля тёмной материи:     {params['dark_matter_fraction']:.3f}")
+    
+    print("\n🚀 Создание симуляции...")
+    sim = create_calibrated_simulation(
+        volume_size=10.0,
+        initial_inflaton_energy=1e12,
+        hubble_parameter=1e-5
+    )
+    
+    print("⏳ Запуск эволюции (500 шагов)...")
+    history = sim.evolve_universe(total_time=500.0, dt=0.5, show_progress=True)
+    
+    print("\n📊 Создание отчёта...")
+    create_final_report(sim, history, save_path=save_path)
+    
+    # Показываем финальные результаты
+    final = history[-1]
+    print("\n" + "="*70)
+    print("ФИНАЛЬНЫЕ РЕЗУЛЬТАТЫ (откалиброванная модель)")
+    print("="*70)
+    print(f"  η (симуляция):   {final['baryon_asymmetry']:.2e}")
+    print(f"  η (Planck):      6.12e-10")
+    
+    if final['baryon_asymmetry'] != 0:
+        ratio = final['baryon_asymmetry'] / 6.12e-10
+        print(f"  Отношение:       {ratio:.2f}")
+        if abs(ratio - 1) < 0.3:
+            print("  ⭐⭐⭐⭐⭐ ОТЛИЧНО!")
+        elif abs(ratio - 1) < 1:
+            print("  ⭐⭐⭐⭐ ХОРОШО!")
+    
+    print(f"\n✅ Отчёт сохранён в: {save_path}/")
+
+
+def run_calibration(save_path: str = './report'):
+    """Калибровка модели под данные Planck 2018 + BAO + LSS."""
+    from oscillators import (
+        create_calibration_report,
+        PlanckData,
+        info
+    )
+    
+    info()
+    
+    print("\n" + "="*70)
+    print("КАЛИБРОВКА ПОД КОСМОЛОГИЧЕСКИЕ ДАННЫЕ")
+    print("="*70)
+    print("\nИсточники данных:")
+    print("  • Planck 2018 (CMB)")
+    print("  • BOSS DR12 (BAO)")
+    print("  • DES Y1 (LSS)")
+    
+    # Показываем ключевые наблюдаемые параметры
+    planck = PlanckData()
+    print(f"\n📊 НАБЛЮДАЕМЫЕ ПАРАМЕТРЫ PLANCK 2018:")
+    print(f"  H₀ = {planck.H0} ± {planck.H0_err} км/с/Мпк")
+    print(f"  Ω_b h² = {planck.Omega_b_h2} ± {planck.Omega_b_h2_err}")
+    print(f"  Ω_c h² = {planck.Omega_c_h2} ± {planck.Omega_c_h2_err}")
+    print(f"  n_s = {planck.n_s} ± {planck.n_s_err}")
+    print(f"  σ₈ = {planck.sigma8} ± {planck.sigma8_err}")
+    print(f"  η = ({planck.eta_B*1e10:.2f} ± {planck.eta_B_err*1e10:.2f}) × 10⁻¹⁰")
+    
+    # Запуск калибровки
+    results = create_calibration_report(save_path=save_path)
+    
+    print(f"\n✅ Калибровка завершена!")
+    print(f"   Результаты сохранены в: {save_path}/")
+    
+    return results
+
+
 def main():
     """Главная функция."""
     parser = argparse.ArgumentParser(
@@ -160,6 +253,18 @@ def main():
         help="Директория для сохранения отчёта (по умолчанию: ./report)"
     )
     
+    parser.add_argument(
+        "--calibrate", "-c",
+        action="store_true",
+        help="Калибровка под данные Planck 2018 + BAO + LSS"
+    )
+    
+    parser.add_argument(
+        "--calibrated",
+        action="store_true",
+        help="Запуск симуляции с откалиброванными параметрами Planck"
+    )
+    
     args = parser.parse_args()
     
     # Информация о библиотеке
@@ -183,6 +288,16 @@ def main():
     # Полный отчёт с визуализацией
     if args.report:
         run_full_report(save_path=args.output)
+        return
+    
+    # Калибровка под данные Planck
+    if args.calibrate:
+        run_calibration(save_path=args.output)
+        return
+    
+    # Симуляция с откалиброванными параметрами
+    if args.calibrated:
+        run_calibrated_simulation(save_path=args.output)
         return
     
     # Запуск всех примеров
